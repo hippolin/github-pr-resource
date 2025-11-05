@@ -28,7 +28,7 @@ type Source struct {
 
 // Validate the source configuration.
 func (s *Source) Validate() error {
-	if s.AccessToken == "" {
+	if s.AccessToken == "" && (s.GithubAppID == "" || s.GithubAppInstallationID == "" || (s.GithubAppPrivateKey == "" && s.GithubAppPrivateKeyPath == "")) {
 		return errors.New("access_token must be set")
 	}
 	if s.Repository == "" {

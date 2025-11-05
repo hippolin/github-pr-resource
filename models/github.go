@@ -9,9 +9,11 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
-	"github.com/google/go-github/v28/github"
+	"github.com/bradleyfalzon/ghinstallation/v2"
+	"github.com/google/go-github/v75/github"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 )
@@ -19,6 +21,12 @@ import (
 type CommonConfig struct {
 	AccessToken         string `json:"access_token"`
 	SkipSSLVerification bool   `json:"skip_ssl_verification"`
+
+	// GitHub Apps support
+	GithubAppID             string `json:"github_app_id,omitempty"`
+	GithubAppInstallationID string `json:"github_app_installation_id,omitempty"`
+	GithubAppPrivateKey     string `json:"github_app_private_key,omitempty"`
+	GithubAppPrivateKeyPath string `json:"github_app_private_key_path,omitempty"`
 }
 
 type GithubConfig struct {
@@ -59,6 +67,12 @@ type GithubClient struct {
 
 // NewGithubClient ...
 func NewGithubClient(common CommonConfig, config GithubConfig) (*GithubClient, error) {
+
+	// 檢查是否使用 GitHub Apps
+	if common.GithubAppID != "" {
+		return NewGithubClientWithApp(common, config)
+	}
+
 	owner, repository, err := parseRepository(config.Repository)
 	if err != nil {
 		return nil, err
@@ -371,4 +385,100 @@ func parseRepository(s string) (string, string, error) {
 		return "", "", errors.New("malformed repository")
 	}
 	return parts[0], parts[1], nil
+}
+
+// helper function to convert string to int64
+func toInt64(s string) (int64, error) {
+	num, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("'%s' is not a valid integer")
+	}
+	return num, nil
+}
+
+func NewGithubClientWithApp(common CommonConfig, config GithubConfig) (*GithubClient, error) {
+	// Parse the repository string to extract owner and repository name
+	owner, repository, err := parseRepository(config.Repository)
+	if err != nil {
+		return nil, err // Error if repository parsing fails
+	}
+
+	githubAppID, err := toInt64(common.GithubAppID)
+	if err != nil {
+		return nil, fmt.Errorf("github_app_id: %v", err)
+	}
+
+	githubAppInstallationID, err := toInt64(common.GithubAppInstallationID)
+	if err != nil {
+		return nil, fmt.Errorf("github_app_installation: %v", err)
+	}
+
+	// Configure HTTP transport to skip SSL verification if enabled, for self-signed certificates
+	var tr *http.Transport
+	if common.SkipSSLVerification {
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	} else {
+		tr = http.DefaultTransport.(*http.Transport) // Use default transport
+	}
+
+	// Create a GitHub App transport using the provided credentials
+	var transport *ghinstallation.Transport
+	if common.GithubAppPrivateKeyPath != "" {
+		transport, err = ghinstallation.NewKeyFromFile(
+			tr,
+			githubAppID,
+			githubAppInstallationID,
+			common.GithubAppPrivateKeyPath,
+		)
+	} else {
+		transport, err = ghinstallation.New(
+			tr,
+			githubAppID,
+			githubAppInstallationID,
+			[]byte(common.GithubAppPrivateKey),
+		)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub App transport: %v", err)
+	}
+
+	// Initialize the HTTP client with the custom transport
+	client := &http.Client{Transport: transport}
+
+	// Create a GitHub v3 client, using a custom endpoint if specified
+	var v3 *github.Client
+	if config.V3Endpoint != "" {
+		endpoint, err := url.Parse(config.V3Endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse v3 endpoint: %v", err)
+		}
+		v3, err = github.NewClient(client).WithEnterpriseURLs(endpoint.String(), endpoint.String())
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		v3 = github.NewClient(client) // Use default v3 client
+	}
+
+	// Create a GitHub v4 client, using a custom endpoint if specified
+	var v4 *githubv4.Client
+	if config.V4Endpoint != "" {
+		endpoint, err := url.Parse(config.V4Endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse v4 endpoint: %v", err)
+		}
+		v4 = githubv4.NewEnterpriseClient(endpoint.String(), client)
+	} else {
+		v4 = githubv4.NewClient(client) // Use default v4 client
+	}
+
+	return &GithubClient{
+		HostingEndpoint: config.HostingEndpoint,
+		V3:              v3,
+		V4:              v4,
+		Owner:           owner,
+		Repository:      repository,
+	}, nil
 }

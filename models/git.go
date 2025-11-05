@@ -1,14 +1,17 @@
 package models
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/bradleyfalzon/ghinstallation/v2"
 )
 
 // Git interface for testing purposes.
@@ -27,6 +30,11 @@ type Git interface {
 }
 
 func NewGitClient(common CommonConfig, disableGitLFS bool, dir string, output io.Writer) (*GitClient, error) {
+	// Check if GitHub App authentication should be used
+	if common.GithubAppID != "" {
+		return NewGitClientWithApp(common, disableGitLFS, dir, output)
+	}
+
 	if common.SkipSSLVerification {
 		os.Setenv("GIT_SSL_NO_VERIFY", "true")
 	}
@@ -40,11 +48,77 @@ func NewGitClient(common CommonConfig, disableGitLFS bool, dir string, output io
 	}, nil
 }
 
+// NewGitClientWithApp creates a GitClient authenticated via GitHub App
+func NewGitClientWithApp(common CommonConfig, disableGitLFS bool, dir string, output io.Writer) (*GitClient, error) {
+	if disableGitLFS {
+		os.Setenv("GIT_LFS_SKIP_SMUDGE", "true")
+	}
+
+	// Configure HTTP transport for GitHub App authentication
+	var tr *http.Transport
+	if common.SkipSSLVerification {
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		os.Setenv("GIT_SSL_NO_VERIFY", "true")
+	} else {
+		tr = http.DefaultTransport.(*http.Transport)
+	}
+
+	githubAppID, err := toInt64(common.GithubAppID)
+	if err != nil {
+		return nil, fmt.Errorf("github_app_id: %v", err)
+	}
+
+	githubAppInstallationID, err := toInt64(common.GithubAppInstallationID)
+	if err != nil {
+		return nil, fmt.Errorf("github_app_installation: %v", err)
+	}
+
+	// Create a GitHub App transport using provided credentials
+	var transport *ghinstallation.Transport
+	// var err error
+	if common.GithubAppPrivateKeyPath != "" {
+		transport, err = ghinstallation.NewKeyFromFile(
+			tr,
+			githubAppID,
+			githubAppInstallationID,
+			common.GithubAppPrivateKeyPath,
+		)
+	} else {
+		transport, err = ghinstallation.New(
+			tr,
+			githubAppID,
+			githubAppInstallationID,
+			[]byte(common.GithubAppPrivateKey),
+		)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub App transport: %v", err)
+	}
+
+	// Generate a token for Git authentication
+	token, err := transport.Token(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate GitHub App token: %v", err)
+	}
+
+	return &GitClient{
+		AccessToken: token,
+		Directory:   dir,
+		Output:      output,
+		// Store the transport for potential token refresh if needed
+		transport: transport,
+	}, nil
+}
+
 // GitClient ...
 type GitClient struct {
 	AccessToken string
 	Directory   string
 	Output      io.Writer
+
+	transport *ghinstallation.Transport // For GitHub App authentication
 }
 
 func (g *GitClient) silentCommand(name string, arg ...string) *exec.Cmd {
@@ -112,8 +186,8 @@ func (g *GitClient) Pull(uri, branch string, depth int, submodules bool, fetchTa
 	cmd := g.command("git", args...)
 
 	// Discard output to have zero chance of logging the access token.
-	cmd.Stdout = ioutil.Discard
-	cmd.Stderr = ioutil.Discard
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("pull failed: %s", cmd)
@@ -216,8 +290,8 @@ func (g *GitClient) Fetch(uri string, prNumber int, depth int, submodules bool, 
 	cmd := g.command("git", args...)
 
 	// Discard output to have zero chance of logging the access token.
-	cmd.Stdout = ioutil.Discard
-	cmd.Stderr = ioutil.Discard
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("fetch failed: %v", err)
@@ -289,6 +363,16 @@ func (g *GitClient) Endpoint(uri string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse commit url: %s", err)
 	}
+
+	// If using GitHub App authentication and token needs refresh
+	if g.transport != nil {
+		token, err := g.transport.Token(nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to refresh GitHub App token: %v", err)
+		}
+		g.AccessToken = token
+	}
+
 	endpoint.User = url.UserPassword("x-oauth-basic", g.AccessToken)
 	return endpoint.String(), nil
 }

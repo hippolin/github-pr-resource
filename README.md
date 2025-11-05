@@ -1,5 +1,5 @@
 ## This was forked from the original [aoldershaw/github-pr-resource](https://github.com/aoldershaw/github-pr-resource)
-to add an additional security check when looking at PR approvals. 
+to add an additional security check when looking at PR approvals.
 
 You can find it on Dockerhub as the `tasruntime/github-pr-instances-resource` image.
 
@@ -57,6 +57,33 @@ There are also some downsides:
 As noted earlier, this resource can either track a list of PRs to a repository,
 or track commits to a single PR. The different modes of operation have
 different configuration options.
+
+### Authentication
+
+This resource supports two authentication methods:
+
+1. **Personal Access Token**: The traditional method using a GitHub access token
+2. **GitHub App**: Authentication using a GitHub App installation (new feature)
+
+You must choose one authentication method - they cannot be used together.
+
+#### Personal Access Token Authentication
+
+| Parameter       | Required | Example | Description                                                                                                                                                                                                              |
+|----------------|----------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `access_token` | Yes*     |         | A Github Access Token with repository access. For private repositories, set `repo:full` permissions on the token. For public repositories, `repo:status` is sufficient. *Required unless using GitHub App authentication* |
+
+#### GitHub App Authentication
+
+| Parameter                      | Required | Example                | Description                                                            |
+|-------------------------------|----------|------------------------|------------------------------------------------------------------------|
+| `github_app_id`               | Yes*     | `12345`                | The ID of your GitHub App                                               |
+| `github_app_installation_id`  | Yes*     | `67890`                | The installation ID of your GitHub App                                  |
+| `github_app_private_key`      | Yes**    | `-----BEGIN RSA...`    | The private key content for your GitHub App                             |
+| `github_app_private_key_path` | Yes**    | `/path/to/private.key` | Path to a file containing the private key for your GitHub App           |
+
+*Required only when using GitHub App authentication instead of access_token
+**Either github_app_private_key OR github_app_private_key_path must be provided
 
 ### List of PRs
 
@@ -223,6 +250,8 @@ requires two pipeline templates.
 For this example, assume you have a resource named `ci`, a repo which contains
 the following pipeline files:
 
+### Example using Personal Access Token
+
 `ci/pipelines/parent.yml`
 ```yaml
 resource_types:
@@ -313,6 +342,78 @@ resources:
       path: pr
       status: failure
     get_params: {skip_download: true}
+```
+
+### Example using GitHub App Authentication
+
+`ci/pipelines/parent.yml`
+```yaml
+resource_types:
+- name: pull-request
+  type: registry-image
+  source:
+    repository: tasruntime/github-pr-resource
+
+resources:
+- name: pull-requests
+  type: pull-request
+  source:
+    repository: itsdalmo/test-repository
+    github_app_id: ((github-app-id))
+    github_app_installation_id: ((github-app-installation-id))
+    github_app_private_key: ((github-app-private-key))
+
+- name: ci
+  type: git
+  source:
+    uri: https://github.com/concourse/ci
+
+jobs:
+- name: update-pr-pipelines
+  plan:
+  - get: ci
+  - get: pull-requests
+    trigger: true
+  - load_var: pull_requests
+    file: pull-requests/prs.json
+  - across:
+    - var: pr
+      values: ((.:pull_requests))
+    set_pipeline: prs
+    file: ci/pipelines/child.yml
+    instance_vars: {number: ((.:pr.number))}
+```
+
+`ci/pipelines/child.yml`
+```yaml
+resource_types:
+- name: pull-request
+  type: registry-image
+  source:
+    repository: tasruntime/github-pr-resource
+
+resources:
+- name: pull-request
+  type: pull-request
+  source:
+    repository: itsdalmo/test-repository
+    github_app_id: ((github-app-id))
+    github_app_installation_id: ((github-app-installation-id))
+    github_app_private_key: ((github-app-private-key))
+    number: ((number))
+
+jobs:
+- name: test
+  plan:
+  - get: pull-request
+    trigger: true
+  - put: pull-request-status
+    resource: pull-request
+    params:
+      path: pull-request
+      status: pending
+    get_params: {skip_download: true}
+  # Rest of job definition remains the same
 ```
 
 ## Costs
