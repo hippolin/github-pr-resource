@@ -416,6 +416,123 @@ jobs:
   # Rest of job definition remains the same
 ```
 
+### Example using GitHub App Authentication with Submodules
+
+For repositories that contain git submodules, you can enable submodule support by setting `submodules: true` in the `get_params`.
+
+`ci/pipelines/parent.yml` (with GitHub App and Submodules)
+```yaml
+resource_types:
+- name: pull-request
+  type: registry-image
+  source:
+    repository: tasruntime/github-pr-resource
+
+resources:
+- name: pull-requests
+  type: pull-request
+  source:
+    repository: itsdalmo/test-repository
+    github_app_id: ((github-app-id))
+    github_app_installation_id: ((github-app-installation-id))
+    github_app_private_key: ((github-app-private-key))
+
+- name: ci
+  type: git
+  source:
+    uri: https://github.com/concourse/ci
+
+jobs:
+- name: update-pr-pipelines
+  plan:
+  - get: ci
+  - get: pull-requests
+    trigger: true
+  - load_var: pull_requests
+    file: pull-requests/prs.json
+  - across:
+    - var: pr
+      values: ((.:pull_requests))
+    set_pipeline: prs
+    file: ci/pipelines/child.yml
+    instance_vars: {number: ((.:pr.number))}
+```
+
+`ci/pipelines/child.yml` (with GitHub App and Submodules)
+```yaml
+resource_types:
+- name: pull-request
+  type: registry-image
+  source:
+    repository: tasruntime/github-pr-resource
+
+resources:
+- name: pull-request
+  type: pull-request
+  source:
+    repository: itsdalmo/test-repository
+    github_app_id: ((github-app-id))
+    github_app_installation_id: ((github-app-installation-id))
+    github_app_private_key: ((github-app-private-key))
+    number: ((number))
+
+jobs:
+- name: test
+  plan:
+  - get: pull-request
+    trigger: true
+    get_params:
+      submodules: true                    # Enable recursive submodule cloning
+      integration_tool: merge             # Optional: merge, rebase, or checkout
+  - put: pull-request-status
+    resource: pull-request
+    params:
+      path: pull-request
+      status: pending
+    get_params: {skip_download: true}
+  - task: unit-test
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source: {repository: alpine/git, tag: latest}
+      inputs:
+        - name: pull-request
+      run:
+        path: /bin/sh
+        args:
+          - -xce
+          - |
+            cd pull-request
+            # Submodules are now available in subdirectories
+            ls -la
+            git log --graph -n 10 --color --pretty=format:"%x1b[31m%h%x09%x1b[32m%d%x1b[0m%x20%s" > log.txt
+            cat log.txt
+  on_success:
+    put: pull-request
+    params:
+      path: pull-request
+      status: success
+    get_params: {skip_download: true}
+  on_failure:
+    put: pull-request
+    params:
+      path: pull-request
+      status: failure
+    get_params: {skip_download: true}
+```
+
+**Notes on Submodule Support:**
+
+* When `submodules: true` is set, the resource will recursively initialize and update all git submodules
+* Submodules are supported with both `access_token` and `github_app_*` authentication methods
+* The `integration_tool` parameter determines how submodules are updated after merging:
+  * `merge` (default): Uses `git submodule update --init --recursive --merge`
+  * `rebase`: Uses `git submodule update --init --recursive --rebase`
+  * `checkout`: Uses `git submodule update --init --recursive --checkout`
+* All submodule repositories are automatically authenticated using the same credentials as the main repository
+* Git LFS is supported alongside submodules through the `disable_git_lfs` parameter in the source
+
 ## Costs
 
 The Github API(s) have a rate limit of 5000 requests per hour (per user). For the V3 API this essentially

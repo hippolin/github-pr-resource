@@ -28,9 +28,19 @@ type Source struct {
 
 // Validate the source configuration.
 func (s *Source) Validate() error {
-	if s.AccessToken == "" && (s.GithubAppID == "" || s.GithubAppInstallationID == "" || (s.GithubAppPrivateKey == "" && s.GithubAppPrivateKeyPath == "")) {
-		return errors.New("access_token must be set")
+	// Check if there is at least one authentication method
+	hasAccessToken := s.AccessToken != ""
+	hasGithubApp := s.GithubAppID != "" && s.GithubAppInstallationID != "" &&
+		(s.GithubAppPrivateKey != "" || s.GithubAppPrivateKeyPath != "")
+
+	if !hasAccessToken && !hasGithubApp {
+		return errors.New("either access_token or github app credentials (github_app_id, github_app_installation_id, and github_app_private_key/github_app_private_key_path) must be set")
 	}
+
+	if hasAccessToken && hasGithubApp {
+		return errors.New("cannot use both access_token and github app credentials")
+	}
+
 	if s.Repository == "" {
 		return errors.New("repository must be set")
 	}
@@ -46,7 +56,7 @@ func (s *Source) Validate() error {
 		case githubv4.PullRequestStateClosed:
 		case githubv4.PullRequestStateMerged:
 		default:
-			return errors.New(fmt.Sprintf("states value \"%s\" must be one of: OPEN, MERGED, CLOSED", state))
+			return fmt.Errorf("states value \"%s\" must be one of: OPEN, MERGED, CLOSED", state)
 		}
 	}
 	return nil

@@ -391,7 +391,7 @@ func parseRepository(s string) (string, string, error) {
 func toInt64(s string) (int64, error) {
 	num, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("'%s' is not a valid integer")
+		return 0, fmt.Errorf("'%s' is not a valid integer", s)
 	}
 	return num, nil
 }

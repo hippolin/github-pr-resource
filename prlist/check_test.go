@@ -30,6 +30,7 @@ var (
 )
 
 func TestCheck(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
 		description  string
 		source       prlist.Source
@@ -52,7 +53,7 @@ func TestCheck(t *testing.T) {
 			pullRequests: testPullRequests,
 			files:        [][]string{},
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[1,2,3,4,5,6,7,8,9,12]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[1,2,3,4,5,6,7,8,9,12]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -66,11 +67,11 @@ func TestCheck(t *testing.T) {
 					AccessToken: "oauthtoken",
 				},
 			},
-			version:      &prlist.Version{PRs: "[2]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[2]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests[1:2],
 			files:        [][]string{},
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[2]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[2]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -84,12 +85,12 @@ func TestCheck(t *testing.T) {
 					AccessToken: "oauthtoken",
 				},
 			},
-			version:      &prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			files:        [][]string{},
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[1,2,3,4,5,6,7,8,9,12]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[1,2,3,4,5,6,7,8,9,12]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -104,7 +105,7 @@ func TestCheck(t *testing.T) {
 				},
 				Paths: []string{"terraform/*/*.tf", "terraform/*/*/*.tf"},
 			},
-			version:      &prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			files: [][]string{
 				{"README.md", "travis.yml"},
@@ -112,8 +113,8 @@ func TestCheck(t *testing.T) {
 				{"terraform/modules/variables.tf", "travis.yml"},
 			},
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[2,3]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[2,3]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -128,7 +129,7 @@ func TestCheck(t *testing.T) {
 				},
 				IgnorePaths: []string{"*.md", "*.yml"},
 			},
-			version:      &prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			files: [][]string{
 				{"README.md", "travis.yml"},                      // Applies to PR 1
@@ -137,8 +138,8 @@ func TestCheck(t *testing.T) {
 				// Subsequent calls will be empty
 			},
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[2,3]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[2,3]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -153,11 +154,11 @@ func TestCheck(t *testing.T) {
 				},
 				DisableCISkip: true,
 			},
-			version:      &prlist.Version{PRs: "[2]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[2]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[2]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[1,2,3,4,5,6,7,8,9,12]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[2]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[1,2,3,4,5,6,7,8,9,12]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -172,11 +173,11 @@ func TestCheck(t *testing.T) {
 				},
 				IgnoreDrafts: true,
 			},
-			version:      &prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[1,2,4,5,6,7,8,9,12]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[1,2,4,5,6,7,8,9,12]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -191,11 +192,11 @@ func TestCheck(t *testing.T) {
 				},
 				IgnoreDrafts: false,
 			},
-			version:      &prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[4]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[1,2,3,4,5,6,7,8,9,12]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[4]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[1,2,3,4,5,6,7,8,9,12]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -210,11 +211,11 @@ func TestCheck(t *testing.T) {
 				},
 				DisableForks: true,
 			},
-			version:      &prlist.Version{PRs: "[6]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[6]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[6]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[1,2,3,4,6,7,8,9,12]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[6]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[1,2,3,4,6,7,8,9,12]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -248,11 +249,11 @@ func TestCheck(t *testing.T) {
 				},
 				RequiredReviewApprovals: 1,
 			},
-			version:      &prlist.Version{PRs: "[9]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[9]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[9]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[8]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[9]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[8]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 
@@ -324,12 +325,12 @@ func TestCheck(t *testing.T) {
 				},
 				States: []githubv4.PullRequestState{githubv4.PullRequestStateClosed, githubv4.PullRequestStateMerged},
 			},
-			version:      &prlist.Version{PRs: "[12]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+			version:      &prlist.Version{PRs: "[12]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
 			pullRequests: testPullRequests,
 			files:        [][]string{},
 			expected: prlist.CheckResponse{
-				prlist.Version{PRs: "[12]", Timestamp: time.Now().Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
-				prlist.Version{PRs: "[10,11]", Timestamp: time.Now().Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[12]", Timestamp: now.Add(-1 * time.Hour).Format("2006-01-02 15:04:05")},
+				prlist.Version{PRs: "[10,11]", Timestamp: now.Format("2006-01-02 15:04:05")},
 			},
 		},
 	}
